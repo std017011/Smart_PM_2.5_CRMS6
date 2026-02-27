@@ -2,183 +2,225 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import date, timedelta
-import plotly.express as px
+import plotly.graph_objects as go # ใช้ graph_objects เพื่อปรับแต่งกราฟได้ละเอียดขึ้น
 
 # 1. ตั้งค่าหน้าเพจ
 st.set_page_config(
     page_title="Air Quality & Weather Dashboard",
+    page_icon="🌤️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🎨 ปรับแต่ง CSS ลับ (ซ่อนองค์ประกอบที่ไม่จำเป็น และทำ UI ให้คลีน)
+# 🎨 ปรับแต่ง CSS แบบ Premium Modern UI
 # ==========================================
 st.markdown("""
 <style>
-    /* ปรับแต่งฟอนต์โดยรวมและการเว้นช่องว่าง */
+    /* ปรับระยะขอบของหน้า */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
+        max-width: 1200px;
     }
     
-    /* ปรับแต่งตัวเลขของ st.metric ให้ดูแพงขึ้น */
+    /* ปรับแต่งส่วนหัวของเว็บให้ดูมีมิติ */
+    .main-title {
+        background: -webkit-linear-gradient(45deg, #0ea5e9, #10b981);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
+        font-size: 2.5rem;
+        margin-bottom: 0px;
+    }
+    
+    /* ปรับแต่งค่าตัวเลข Metric ให้ดู Premium */
     div[data-testid="stMetricValue"] {
-        font-size: 28px;
-        font-weight: 600;
-        color: #1e293b;
+        font-size: 32px !important;
+        font-weight: 700 !important;
+        color: #0f172a;
     }
     
-    /* รองรับ Dark Mode สำหรับตัวเลข */
+    /* ปรับแต่ง Delta (การเพิ่ม/ลด) ให้ดูเนียนตา */
+    div[data-testid="stMetricDelta"] svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* ปรับแต่งกรอบ (Cards) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Dark Mode Adjustments */
     @media (prefers-color-scheme: dark) {
-        div[data-testid="stMetricValue"] {
-            color: #f8fafc;
+        div[data-testid="stMetricValue"] { color: #f8fafc; }
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #1e293b;
+            border: 1px solid #334155;
         }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. ส่วนหัวของเว็บไซต์ (ใช้ Material Icons แทนอิโมจิ)
-st.markdown("## :material/dashboard: ระบบรายงานคุณภาพอากาศและสภาพอากาศ")
-st.markdown("<p style='color: #64748b; margin-top: -10px;'>แดชบอร์ดติดตามข้อมูลแบบเรียลไทม์ พร้อมการวิเคราะห์แนวโน้มย้อนหลัง</p>", unsafe_allow_html=True)
-st.divider()
+# 2. ส่วนหัวของเว็บไซต์
+st.markdown("<h1 class='main-title'><span class='material-icons'></span> ระบบรายงานคุณภาพอากาศและสภาพอากาศ</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color: #64748b; font-size: 1.1rem; margin-top: -5px;'>แดชบอร์ดติดตามข้อมูลแบบเรียลไทม์ พร้อมการวิเคราะห์แนวโน้มย้อนหลัง</p>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True) # เว้นระยะห่างเล็กน้อยแทน st.divider()
 
-# 3. เมนูด้านข้าง (สร้างกรอบครอบการตั้งค่า)
+# 3. เมนูด้านข้าง
 with st.sidebar:
-    st.markdown("### :material/tune: การตั้งค่า")
+    st.image("https://cdn-icons-png.flaticon.com/512/3222/3222800.png", width=60) # เพิ่ม Icon สวยๆ
+    st.markdown("### ⚙️ การตั้งค่า")
     
-    # ใช้กรอบ (Card) เพื่อจัดกลุ่มเมนู
     with st.container(border=True):
-        start_date = st.date_input("วันที่เริ่มต้น", date.today() - timedelta(days=7))
-        end_date = st.date_input("วันที่สิ้นสุด", date.today())
+        start_date = st.date_input("📅 วันที่เริ่มต้น", date.today() - timedelta(days=7))
+        end_date = st.date_input("📅 วันที่สิ้นสุด", date.today())
         
     st.markdown("""
-        <div style='background-color: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px;'>
-            <p style='color: #475569; font-size: 14px; margin: 0;'>
-                <b>:material/info: คำแนะนำ:</b><br>
-                เลือกช่วงเวลาที่ต้องการ ระบบจะทำการปรับกราฟและค่าสถิติโดยอัตโนมัติ
+        <div style='background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 15px; border-radius: 12px; margin-top: 20px; border: 1px solid #bae6fd;'>
+            <p style='color: #0369a1; font-size: 14px; margin: 0; line-height: 1.5;'>
+                <b>💡 คำแนะนำ:</b><br>
+                เลือกช่วงเวลาที่ต้องการ ระบบจะทำการประมวลผลและอัปเดตข้อมูลให้ทันที
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-# 4. ฟังก์ชันดึงข้อมูล (จำลอง)
+# 4. ฟังก์ชันดึงข้อมูล (จำลอง) แบบเนียนขึ้น
 @st.cache_data
 def fetch_data_from_api(start, end):
     date_range = pd.date_range(start=start, end=end, freq='H')
     
-    pm25 = np.random.uniform(10, 150, size=len(date_range))
-    temp = np.random.uniform(22, 38, size=len(date_range))
-    humid = np.random.uniform(40, 90, size=len(date_range))
+    # สร้างข้อมูลแบบมีแนวโน้มให้ดูสมจริงขึ้น (Sine wave + Noise)
+    np.random.seed(42)
+    time_seq = np.arange(len(date_range))
+    pm25 = 50 + 30 * np.sin(time_seq / 10) + np.random.normal(0, 10, len(date_range))
+    temp = 28 + 5 * np.sin(time_seq / 12) + np.random.normal(0, 2, len(date_range))
+    humid = 65 + 15 * np.cos(time_seq / 12) + np.random.normal(0, 5, len(date_range))
     
     data = pd.DataFrame({
         'เวลา': date_range,
-        'PM2.5': pd.Series(pm25).rolling(3, min_periods=1).mean(),
-        'อุณหภูมิ': pd.Series(temp).rolling(3, min_periods=1).mean(),
-        'ความชื้น': pd.Series(humid).rolling(3, min_periods=1).mean()
+        'PM2.5': np.maximum(5, pm25), # ไม่ให้ค่าติดลบ
+        'อุณหภูมิ': temp,
+        'ความชื้น': np.clip(humid, 20, 100) # ให้อยู่ระหว่าง 20-100%
     })
     return data
 
-# ฟังก์ชันสำหรับสร้างป้ายสถานะ (Badge) สีสันสวยงามแบบ Minimal
+# ปรับปรุง Badge ให้ดู Modern มากขึ้น
 def get_aqi_badge(pm25_val):
     if pm25_val <= 37.5:
-        return "<div style='background-color: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 20px; font-weight: 600; display: inline-block; font-size: 14px;'>ดีมาก (Good)</div>"
+        bg, text, icon = "#dcfce7", "#166534", "🌿 ดีมาก"
     elif pm25_val <= 75:
-        return "<div style='background-color: #fef08a; color: #854d0e; padding: 6px 12px; border-radius: 20px; font-weight: 600; display: inline-block; font-size: 14px;'>ปานกลาง (Moderate)</div>"
+        bg, text, icon = "#fef08a", "#854d0e", "⚠️ ปานกลาง"
     else:
-        return "<div style='background-color: #fee2e2; color: #991b1b; padding: 6px 12px; border-radius: 20px; font-weight: 600; display: inline-block; font-size: 14px;'>มีผลกระทบ (Unhealthy)</div>"
+        bg, text, icon = "#fee2e2", "#991b1b", "🚨 มีผลกระทบ"
+        
+    return f"""
+    <div style='display: flex; align-items: center; justify-content: center; height: 100%; padding-top: 10px;'>
+        <div style='background-color: {bg}; color: {text}; padding: 8px 16px; border-radius: 30px; 
+        font-weight: 700; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid {text}20;'>
+            {icon}
+        </div>
+    </div>
+    """
 
-# 5. ตรวจสอบเงื่อนไขและแสดงผล
+# 5. แสดงผล
 if start_date > end_date:
-    st.error(":material/warning: กรุณาเลือกวันที่เริ่มต้น ให้ก่อนหรือเท่ากับวันที่สิ้นสุด")
+    st.error("⚠️ กรุณาเลือกวันที่เริ่มต้น ให้ก่อนหรือเท่ากับวันที่สิ้นสุด")
 else:
     df = fetch_data_from_api(start_date, end_date)
     latest = df.iloc[-1]
     previous = df.iloc[-2] if len(df) > 1 else latest
     
-    st.markdown("#### :material/location_on: สถานการณ์ปัจจุบัน")
+    st.markdown("#### 📍 สถานการณ์ปัจจุบัน")
     
-    # --- 5.1 สร้าง Cards แบบเรียบหรูโดยใช้ st.container(border=True) ---
+    # --- 5.1 สร้าง Cards แบบ Premium ---
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         with st.container(border=True):
-            st.markdown("<p style='color:#64748b; font-size:14px; margin-bottom:5px;'>:material/air: ปริมาณฝุ่น PM2.5</p>", unsafe_allow_html=True)
-            st.metric(
-                label="PM2.5", 
-                value=f"{latest['PM2.5']:.1f} µg/m³",
-                delta=f"{(latest['PM2.5'] - previous['PM2.5']):.1f} (1 ชม.)",
-                delta_color="inverse",
-                label_visibility="collapsed" # ซ่อน Label เดิมของ Streamlit เพื่อใช้ของเราเองที่สวยกว่า
-            )
+            st.markdown("<p style='color:#64748b; font-size:14px; font-weight: 600; margin-bottom:0px;'>🌫️ ฝุ่น PM2.5</p>", unsafe_allow_html=True)
+            st.metric(label="PM2.5", value=f"{latest['PM2.5']:.1f} µg/m³", delta=f"{(latest['PM2.5'] - previous['PM2.5']):.1f} (1 ชม.)", delta_color="inverse", label_visibility="collapsed")
             
     with col2:
         with st.container(border=True):
-            st.markdown("<p style='color:#64748b; font-size:14px; margin-bottom:15px;'>:material/health_and_safety: ระดับคุณภาพอากาศ</p>", unsafe_allow_html=True)
-            # แสดง Badge สีแทนการใช้ st.metric แบบเดิม
+            st.markdown("<p style='color:#64748b; font-size:14px; font-weight: 600; margin-bottom:0px;'>🛡️ คุณภาพอากาศ</p>", unsafe_allow_html=True)
             st.markdown(get_aqi_badge(latest['PM2.5']), unsafe_allow_html=True)
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True) # ดันให้ช่องไฟเท่ากับ card อื่น
 
     with col3:
         with st.container(border=True):
-            st.markdown("<p style='color:#64748b; font-size:14px; margin-bottom:5px;'>:material/thermostat: อุณหภูมิ</p>", unsafe_allow_html=True)
-            st.metric(
-                label="อุณหภูมิ", 
-                value=f"{latest['อุณหภูมิ']:.1f} °C",
-                delta=f"{(latest['อุณหภูมิ'] - previous['อุณหภูมิ']):.1f} °C",
-                delta_color="normal",
-                label_visibility="collapsed"
-            )
+            st.markdown("<p style='color:#64748b; font-size:14px; font-weight: 600; margin-bottom:0px;'>🌡️ อุณหภูมิ</p>", unsafe_allow_html=True)
+            st.metric(label="อุณหภูมิ", value=f"{latest['อุณหภูมิ']:.1f} °C", delta=f"{(latest['อุณหภูมิ'] - previous['อุณหภูมิ']):.1f} °C", delta_color="normal", label_visibility="collapsed")
 
     with col4:
         with st.container(border=True):
-            st.markdown("<p style='color:#64748b; font-size:14px; margin-bottom:5px;'>:material/water_drop: ความชื้น</p>", unsafe_allow_html=True)
-            st.metric(
-                label="ความชื้น", 
-                value=f"{latest['ความชื้น']:.1f} %",
-                delta=f"{(latest['ความชื้น'] - previous['ความชื้น']):.1f} %",
-                delta_color="off",
-                label_visibility="collapsed"
-            )
+            st.markdown("<p style='color:#64748b; font-size:14px; font-weight: 600; margin-bottom:0px;'>💧 ความชื้น</p>", unsafe_allow_html=True)
+            st.metric(label="ความชื้น", value=f"{latest['ความชื้น']:.1f} %", delta=f"{(latest['ความชื้น'] - previous['ความชื้น']):.1f} %", delta_color="off", label_visibility="collapsed")
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # --- 5.2 กราฟข้อมูลย้อนหลัง (คุมโทนสี สไตล์ Minimal) ---
-    st.markdown("#### :material/analytics: ข้อมูลและแนวโน้มย้อนหลัง")
+    # --- 5.2 กราฟข้อมูลย้อนหลัง (เปลี่ยนมาใช้ graph_objects เพื่อความเนียน) ---
+    st.markdown("#### 📊 ข้อมูลและแนวโน้มย้อนหลัง")
     
-    # ใช้ Tabs แบบไม่มีอิโมจิ
-    tab1, tab2 = st.tabs(["ข้อมูลฝุ่น PM2.5", "ข้อมูลอุณหภูมิและความชื้น"])
+    tab1, tab2 = st.tabs(["🌫️ ข้อมูลฝุ่น PM2.5", "🌡️ ข้อมูลอุณหภูมิและความชื้น"])
+    
+    # การตั้งค่า Layout พื้นฐานของกราฟ
+    chart_layout = dict(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=380,
+        hovermode="x unified",
+        xaxis=dict(showgrid=False, title=""),
+        yaxis=dict(showgrid=True, gridcolor='rgba(128, 128, 128, 0.1)'), # สีเส้นตารางจางๆ รองรับทั้ง Dark/Light mode
+        font=dict(family="sans-serif")
+    )
     
     with tab1:
         with st.container(border=True):
-            fig_pm = px.area(
-                df, x='เวลา', y='PM2.5', 
-                color_discrete_sequence=['#14b8a6'], # สี Teal (เขียวอมฟ้า) คลีนๆ
-            )
-            # ปรับแต่งให้ Plotly ดูคลีน ไร้เส้นขอบและตารางที่รกตา
-            fig_pm.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=0, r=0, t=20, b=0),
-                height=350,
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=True, gridcolor='#f1f5f9')
-            )
-            st.plotly_chart(fig_pm, use_container_width=True)
+            fig_pm = go.Figure()
+            # ใช้ Spline เพื่อให้เส้นโค้งมน และเพิ่ม Gradient fill ด้านล่าง
+            fig_pm.add_trace(go.Scatter(
+                x=df['เวลา'], y=df['PM2.5'],
+                fill='tozeroy',
+                mode='lines',
+                line=dict(color='#0ea5e9', width=3, shape='spline'),
+                fillcolor='rgba(14, 165, 233, 0.15)',
+                name='PM2.5',
+                hovertemplate='%{y:.1f} µg/m³<extra></extra>'
+            ))
+            fig_pm.update_layout(**chart_layout)
+            st.plotly_chart(fig_pm, use_container_width=True, config={'displayModeBar': False})
         
     with tab2:
         with st.container(border=True):
-            fig_weather = px.line(
-                df, x='เวลา', y=['อุณหภูมิ', 'ความชื้น'],
-                color_discrete_sequence=['#f97316', '#3b82f6'], # สีส้มพาสเทล (อุณหภูมิ) และสีฟ้า (ความชื้น)
-            )
-            fig_weather.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                legend_title_text="",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(l=0, r=0, t=10, b=0),
-                height=350,
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=True, gridcolor='#f1f5f9')
-            )
-            st.plotly_chart(fig_weather, use_container_width=True)
+            fig_weather = go.Figure()
+            # เส้นอุณหภูมิ
+            fig_weather.add_trace(go.Scatter(
+                x=df['เวลา'], y=df['อุณหภูมิ'],
+                mode='lines',
+                line=dict(color='#f97316', width=3, shape='spline'),
+                name='อุณหภูมิ (°C)'
+            ))
+            # เส้นความชื้น (แยกแกน Y ถ้าต้องการ แต่ในที่นี้วาดรวมกันเพื่อให้สอดคล้องกับโค้ดเดิม)
+            fig_weather.add_trace(go.Scatter(
+                x=df['เวลา'], y=df['ความชื้น'],
+                mode='lines',
+                line=dict(color='#3b82f6', width=3, shape='spline', dash='dot'),
+                name='ความชื้น (%)'
+            ))
+            
+            # ปรับแต่ง Layout เพิ่มเติมสำหรับ Tab 2
+            layout_weather = chart_layout.copy()
+            layout_weather['legend'] = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            fig_weather.update_layout(**layout_weather)
+            
+            st.plotly_chart(fig_weather, use_container_width=True, config={'displayModeBar': False})
