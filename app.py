@@ -173,9 +173,6 @@ with st.container(border=True):
                 y=df_history['PM2.5'],
                 mode='lines+markers',      # <--- Added +markers (dots)
                 marker=dict(size=4),       # <--- Set dot size
-                fill='tozeroy',
-                fillcolor='rgba(59, 130, 246, 0.2)', # Transparent blue fill
-                name='PM2.5'
             ))
             
             # --- FIX 3: Add a zoom-in slider at the bottom! ---
