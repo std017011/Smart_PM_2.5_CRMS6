@@ -165,15 +165,14 @@ else:
     df_history = get_historical_data_from_db(start_date, end_date)
 
     if not df_history.empty and 'PM2.5' in df_history.columns:
-        with st.container(border=True):
+with st.container(border=True):
             fig = go.Figure()
             
-            # --- FIX 2: Thinner line, bright blue color for Dark/Light mode! ---
             fig.add_trace(go.Scatter(
                 x=df_history['เวลา'], 
                 y=df_history['PM2.5'],
-                mode='lines',
-                line=dict(color='#3b82f6', width=1.5), # Bright blue, thin line
+                mode='lines+markers',      # <--- Added +markers (dots)
+                marker=dict(size=4),       # <--- Set dot size
                 fill='tozeroy',
                 fillcolor='rgba(59, 130, 246, 0.2)', # Transparent blue fill
                 name='PM2.5'
