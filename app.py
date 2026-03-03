@@ -73,8 +73,8 @@ def get_historical_data_from_db(start_dt, end_dt):
     mask = (df['เวลา'] >= start_datetime) & (df['เวลา'] <= end_datetime)
     filtered_df = df.loc[mask].copy().sort_values(by='เวลา')
     
-    if 'pm2.5' in filtered_df.columns:
-        filtered_df.rename(columns={'pm2.5': 'PM2.5'}, inplace=True)
+if 'pm25' in filtered_df.columns:
+        filtered_df.rename(columns={'pm25': 'PM2.5'}, inplace=True)
         
     return filtered_df
 
