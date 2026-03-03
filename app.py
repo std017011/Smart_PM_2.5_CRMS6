@@ -10,7 +10,6 @@ import json
 # 0. Setup Firebase for Streamlit Cloud
 # ==========================================
 if not firebase_admin._apps:
-    # Read the secret key from Streamlit Advanced Settings
     key_dict = json.loads(st.secrets["firebase"]["my_secret_key"])
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred, {
@@ -24,10 +23,10 @@ st.set_page_config(page_title="ระบบรายงานคุณภาพ�
 
 st.markdown("""
 <style>
-    .main-title { font-weight: 700; font-size: 1.8rem; color: #1e293b; margin-bottom: 0; }
+    .main-title { font-weight: 700; font-size: 1.8rem; margin-bottom: 0; }
     .sub-title { color: #64748b; font-size: 1.1rem; margin-top: 5px; }
-    div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); background-color: #ffffff; }
-    div[data-testid="stMetricValue"] { font-size: 2.2rem !important; font-weight: 700 !important; color: #0f172a; }
+    div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    div[data-testid="stMetricValue"] { font-size: 2.2rem !important; font-weight: 700 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -37,9 +36,12 @@ st.markdown("""
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3222/3222800.png", width=60)
     st.markdown("### ⚙️ การตั้งค่า")
+    
+    st.info("💡 เลือกช่วงเวลาที่มีข้อมูล (เช่น ปี 2026)")
     with st.container(border=True):
-        start_date = st.date_input("📅 วันที่เริ่มต้น", date.today() - timedelta(days=7))
-        end_date = st.date_input("📅 วันที่สิ้นสุด", date.today())
+        # I changed the default date to start near your Excel data just in case
+        start_date = st.date_input("📅 วันที่เริ่มต้น", date(2026, 2, 1))
+        end_date = st.date_input("📅 วันที่สิ้นสุด", date(2026, 3, 1))
 
 # ==========================================
 # 3. Data Functions
@@ -57,19 +59,14 @@ def get_realtime_data_from_api():
 
 @st.cache_data(ttl=60)
 def get_historical_data_from_db(start_dt, end_dt):
-    if start_dt > end_dt: 
-        return pd.DataFrame()
+    if start_dt > end_dt: return pd.DataFrame()
         
     ref = db.reference('sensor_data')
     all_data = ref.get()
-    
-    if not all_data: 
-        return pd.DataFrame()
+    if not all_data: return pd.DataFrame()
         
     df = pd.DataFrame.from_dict(all_data, orient='index')
-    
-    if 'saved_at' not in df.columns: 
-        return pd.DataFrame()
+    if 'saved_at' not in df.columns: return pd.DataFrame()
         
     df['เวลา'] = pd.to_datetime(df['saved_at'])
     
@@ -79,9 +76,13 @@ def get_historical_data_from_db(start_dt, end_dt):
     mask = (df['เวลา'] >= start_datetime) & (df['เวลา'] <= end_datetime)
     filtered_df = df.loc[mask].copy().sort_values(by='เวลา')
     
-    # Changed pm2.5 to pm25 here, and fixed the indentation!
     if 'pm25' in filtered_df.columns:
         filtered_df.rename(columns={'pm25': 'PM2.5'}, inplace=True)
+    
+    # --- FIX 1: Ensure PM2.5 is a Number and drop empty rows ---
+    if 'PM2.5' in filtered_df.columns:
+        filtered_df['PM2.5'] = pd.to_numeric(filtered_df['PM2.5'], errors='coerce')
+        filtered_df.dropna(subset=['PM2.5'], inplace=True)
         
     return filtered_df
 
@@ -127,7 +128,6 @@ else:
     current_data = get_realtime_data_from_api()
     
     if current_data:
-        # Changed 'pm2.5' to 'pm25' here too!
         pm25_now = current_data.get('pm25', 0) 
         temp_now = current_data.get('temperature', 0)
         hum_now = current_data.get('humidity', 0)
@@ -167,8 +167,26 @@ else:
     if not df_history.empty and 'PM2.5' in df_history.columns:
         with st.container(border=True):
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_history['เวลา'], y=df_history['PM2.5'], mode='lines', line=dict(color='#334155', width=2), fill='tozeroy', fillcolor='rgba(226, 232, 240, 0.5)'))
-            fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=20, b=20), height=300)
+            
+            # --- FIX 2: Thinner line, bright blue color for Dark/Light mode! ---
+            fig.add_trace(go.Scatter(
+                x=df_history['เวลา'], 
+                y=df_history['PM2.5'],
+                mode='lines',
+                line=dict(color='#3b82f6', width=1.5), # Bright blue, thin line
+                fill='tozeroy',
+                fillcolor='rgba(59, 130, 246, 0.2)', # Transparent blue fill
+                name='PM2.5'
+            ))
+            
+            # --- FIX 3: Add a zoom-in slider at the bottom! ---
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                margin=dict(l=20, r=20, t=20, b=20), 
+                height=400,
+                xaxis=dict(rangeslider=dict(visible=True)) # Zoom slider turned ON
+            )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     else:
         st.info("ไม่มีข้อมูลในฐานข้อมูล (No data available in Database yet)")
