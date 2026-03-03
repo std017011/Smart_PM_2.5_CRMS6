@@ -39,7 +39,7 @@ with st.sidebar:
     
     st.info("💡 เลือกช่วงเวลาที่มีข้อมูล (เช่น ปี 2026)")
     with st.container(border=True):
-        # I changed the default date to start near your Excel data just in case
+        # Default date set to Feb 2026 based on your data
         start_date = st.date_input("📅 วันที่เริ่มต้น", date(2026, 2, 1))
         end_date = st.date_input("📅 วันที่สิ้นสุด", date(2026, 3, 1))
 
@@ -79,7 +79,7 @@ def get_historical_data_from_db(start_dt, end_dt):
     if 'pm25' in filtered_df.columns:
         filtered_df.rename(columns={'pm25': 'PM2.5'}, inplace=True)
     
-    # --- FIX 1: Ensure PM2.5 is a Number and drop empty rows ---
+    # Ensure PM2.5 is numeric and drop empty rows
     if 'PM2.5' in filtered_df.columns:
         filtered_df['PM2.5'] = pd.to_numeric(filtered_df['PM2.5'], errors='coerce')
         filtered_df.dropna(subset=['PM2.5'], inplace=True)
@@ -164,24 +164,29 @@ else:
     st.markdown("### 📊 ข้อมูลย้อนหลัง")
     df_history = get_historical_data_from_db(start_date, end_date)
 
+    # Correct indentation starts here
     if not df_history.empty and 'PM2.5' in df_history.columns:
-with st.container(border=True):
+        with st.container(border=True):
             fig = go.Figure()
             
+            # Added markers (dots) + lines so you can see if the data is flat!
             fig.add_trace(go.Scatter(
                 x=df_history['เวลา'], 
                 y=df_history['PM2.5'],
-                mode='lines+markers',      # <--- Added +markers (dots)
-                marker=dict(size=4),       # <--- Set dot size
+                mode='lines+markers',
+                marker=dict(size=4, color='#3b82f6'),
+                line=dict(color='#3b82f6', width=1.5),
+                fill='tozeroy',
+                fillcolor='rgba(59, 130, 246, 0.2)',
+                name='PM2.5'
             ))
             
-            # --- FIX 3: Add a zoom-in slider at the bottom! ---
             fig.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)', 
                 margin=dict(l=20, r=20, t=20, b=20), 
                 height=400,
-                xaxis=dict(rangeslider=dict(visible=True)) # Zoom slider turned ON
+                xaxis=dict(rangeslider=dict(visible=True))
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     else:
