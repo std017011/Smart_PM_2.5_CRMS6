@@ -10,7 +10,7 @@ import json
 # 0. Setup Firebase for Streamlit Cloud
 # ==========================================
 if not firebase_admin._apps:
-    # Read the secret key we put in Streamlit Advanced Settings
+    # Read the secret key from Streamlit Advanced Settings
     key_dict = json.loads(st.secrets["firebase"]["my_secret_key"])
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred, {
@@ -57,14 +57,20 @@ def get_realtime_data_from_api():
 
 @st.cache_data(ttl=60)
 def get_historical_data_from_db(start_dt, end_dt):
-    if start_dt > end_dt: return pd.DataFrame()
+    if start_dt > end_dt: 
+        return pd.DataFrame()
+        
     ref = db.reference('sensor_data')
     all_data = ref.get()
     
-    if not all_data: return pd.DataFrame()
+    if not all_data: 
+        return pd.DataFrame()
+        
     df = pd.DataFrame.from_dict(all_data, orient='index')
     
-    if 'saved_at' not in df.columns: return pd.DataFrame()
+    if 'saved_at' not in df.columns: 
+        return pd.DataFrame()
+        
     df['เวลา'] = pd.to_datetime(df['saved_at'])
     
     start_datetime = pd.to_datetime(start_dt)
@@ -73,9 +79,10 @@ def get_historical_data_from_db(start_dt, end_dt):
     mask = (df['เวลา'] >= start_datetime) & (df['เวลา'] <= end_datetime)
     filtered_df = df.loc[mask].copy().sort_values(by='เวลา')
     
-if 'pm25' in filtered_df.columns:
+    # Changed pm2.5 to pm25 here, and fixed the indentation!
+    if 'pm25' in filtered_df.columns:
         filtered_df.rename(columns={'pm25': 'PM2.5'}, inplace=True)
-
+        
     return filtered_df
 
 # ==========================================
@@ -120,7 +127,8 @@ else:
     current_data = get_realtime_data_from_api()
     
     if current_data:
-        pm25_now = current_data.get('pm2.5', 0) 
+        # Changed 'pm2.5' to 'pm25' here too!
+        pm25_now = current_data.get('pm25', 0) 
         temp_now = current_data.get('temperature', 0)
         hum_now = current_data.get('humidity', 0)
 
