@@ -11,10 +11,10 @@ import json
 # ==========================================
 if not firebase_admin._apps:
     # Read the secret key we put in Streamlit Advanced Settings
-    key_dict = json.loads(st.secrets["firebase"]["my_secret_key"])
+    key_dict = json.loads(st.secrets["firebase"]["MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCjCKRmtvUvFuh9\n2sU5QmIxJ805Fn/99AzY3jo5ySpYJ1687NpjOzxbsshJgZAnBEWEB+EKE2oABohG\nQWTYtX6qPxIgzmGPx5y/FGY3m6P3NYVkDqUZwOR4SSDzQoWjxOkL92XNHnusQ0hs\n6L62u91KHnVVMy7t6PLsPulVcb3jEga/8Z5+1doEpAOBphDmJyNpxwf5OyhDhdST\nUbLBPurRK+RyR02iNaV6Y4vYVXy3aqXRcCNEmMS/33K5DJ/WWMMwtqq3TFl2qIJB\nrTcSbc5Zocsc3CZ1KkOco//641FZ9fQ9X/qwJ5zy2V2mmXHP7XpMhH+JPDRj0dvr\nelfdAoUdAgMBAAECggEAAdjS9ItqHjFhOMApzLsAiJWZTQrQMD81hlYCK0lfur4s\nM0cB1eKrjaSUyofR94+R/oQKhowyR+qB4tv22BtGdLjdYvjy0CShRf2QPjiB9EnJ\n0JKJzj1WTpsFrFNzAZwHfp2prHZtijOCjVMFZeXCCwDMVQ/6sG9YkcBag6XW3o/s\n0a6zF+Na27vMudwLjiav4XtVQCItKIty+fGnQhISTvCYeKohP4iSvpOLcsW1IXk6\n9ozol9d9UHyBitxGZbdBQz7pnQhaV8IUgnWE08G8NtzlCWwgvhZVvdRql6+1RuVM\nQGWHYpx3l4McK/wu6Z+doPT7jTBoZG9LYQ0ggMP1mwKBgQDYuJD/b25JMkZhMviP\nzNkbv1fdP2yHxDWZ7n7FQeQUffNbAkDRbkdSMJppzi0nnB1yeQkYVzlrgmDCcAwS\nOZh0khic0eRd5EqnUp2arinn9TLnpIkBDcLeeWLzTrJ+HWT5GiiA836kUYfI9Mug\n29KFz0tIFeoAvwhPyCAPWQxP7wKBgQDAlRflWndkFOyJOsQq40i/lbBR/uQ5akrm\n6PGLqQtip/XsBONSGNGaRjrPnvO772UvrWZUBXSfkFN0hBvLRx0VQCvTP8wb4RlA\n9zYlhz/c08AoOyXDmCzQHAhdR7VQ7kt6HTWH/WLddqhbyzi7eE+n4op0tXJyExWm\nIBuXqyJvswKBgChuzsaJQJcxZQYPX2Zcvoi5uyfRBGuUBLgSUd51e5sDIJrzIaqx\nG2dPIA/rYmtIagoIYNUEuPbA3VKJWwcvba0Z8LOZSTTnObJb7IGGStU23uduwAzN\nR3UASqDAJvb2fvcmlTXxt8fqWh345eC+Alnqoc3yILVA7skLukeCwpRLAoGAJyTm\n84Z86AncvlQElZcXLWH2seP2bbkuOls05adZmhb7xJqFviUvTYVi5NqxPgz96z/6\noa9uMhS68d78a0gsICqn/ctk6HHLmUnmZqBkGbWsxECpf2VKDo70IEm4EBgvnUWc\noOSfGNbKh8X55RkiT8SbUfejqI46g0bZdO2jFUMCgYA2jq6ubs1PZfk/lj5OJsco\nypLK17Ej/CT+uDcfZ8MulroOpGBj/ICMA+wjusROJ45FWg7mUr9MTNJgyxf2eCB9\nSLJCoZ6k0vPIo+1sy/Ww+Yqw/WoPvNu13TC6eUmsCC6G8LSHIQWaRMO8OzbcnQkQ\nErRrJS8eyjktch04mIISxg=="])
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred, {
-        'databaseURL': st.secrets["firebase"]["db_url"]
+        'databaseURL': st.secrets["firebase"]["https://smart-pm-25-crms6-default-rtdb.asia-southeast1.firebasedatabase.app/"]
     })
 
 # ==========================================
