@@ -76,6 +76,8 @@ def get_historical_data_from_db(start_dt, end_dt):
 if 'pm25' in filtered_df.columns:
         filtered_df.rename(columns={'pm25': 'PM2.5'}, inplace=True)
 
+    return filtered_df
+
 # ==========================================
 # 4. UI Functions
 # ==========================================
