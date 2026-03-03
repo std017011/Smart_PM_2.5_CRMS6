@@ -7,46 +7,77 @@ from firebase_admin import credentials, db
 import json
 
 # ==========================================
-# 0. Setup Firebase for Streamlit Cloud
+# 1. Page Config & Professional CSS
 # ==========================================
-if not firebase_admin._apps:
-    key_dict = json.loads(st.secrets["firebase"]["my_secret_key"])
-    cred = credentials.Certificate(key_dict)
-    firebase_admin.initialize_app(cred, {
-        'databaseURL': st.secrets["firebase"]["db_url"]
-    })
+st.set_page_config(
+    page_title="CRMS6 Air Quality", 
+    page_icon="🍃", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ==========================================
-# 1. Page Config
-# ==========================================
-st.set_page_config(page_title="ระบบรายงานคุณภาพอากาศ", page_icon="☁️", layout="wide")
-
+# Custom CSS to make it look like a "Dashboard"
 st.markdown("""
 <style>
-    .main-title { font-weight: 700; font-size: 1.8rem; margin-bottom: 0; }
-    .sub-title { color: #64748b; font-size: 1.1rem; margin-top: 5px; }
-    div[data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-    div[data-testid="stMetricValue"] { font-size: 2.2rem !important; font-weight: 700 !important; }
+    /* Background & Fonts */
+    .stApp {
+        background-color: #f8f9fa;
+    }
+    
+    /* Metrics Cards */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+    
+    /* Remove default padding at top */
+    .block-container {
+        padding-top: 2rem;
+    }
+    
+    /* Custom Title */
+    .dashboard-title {
+        font-size: 2rem; 
+        font-weight: 800; 
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    .dashboard-subtitle {
+        font-size: 1rem;
+        color: #64748b;
+        margin-bottom: 2rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Sidebar
+# 2. Setup Firebase
 # ==========================================
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3222/3222800.png", width=60)
-    st.markdown("### ⚙️ การตั้งค่า")
-    
-    st.info("💡 เลือกช่วงเวลาที่มีข้อมูล (เช่น ปี 2026)")
-    with st.container(border=True):
-        # Default date set to Feb 2026 based on your data
-        start_date = st.date_input("📅 วันที่เริ่มต้น", date(2026, 2, 1))
-        end_date = st.date_input("📅 วันที่สิ้นสุด", date(2026, 3, 1))
+if not firebase_admin._apps:
+    try:
+        key_dict = json.loads(st.secrets["firebase"]["my_secret_key"])
+        cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': st.secrets["firebase"]["db_url"]
+        })
+    except Exception as e:
+        st.error(f"⚠️ Firebase Error: {e}")
 
 # ==========================================
-# 3. Data Functions
+# 3. Helper Functions
 # ==========================================
-def get_realtime_data_from_api():
+def get_aqi_status(pm25):
+    if pm25 <= 15: return "ดีมาก (Very Good)", "#3ddc84"   # Green
+    elif pm25 <= 25: return "ดี (Good)", "#f5d63d"        # Yellow
+    elif pm25 <= 37.5: return "ปานกลาง (Moderate)", "#ff9800" # Orange
+    elif pm25 <= 75: return "เริ่มมีผลกระทบ (Unhealthy)", "#ff5722" # Red
+    else: return "มีผลกระทบ (Very Unhealthy)", "#b71c1c"  # Purple/Dark Red
+
+def get_realtime_data():
     try:
         ref = db.reference('sensor_data')
         latest_data = ref.order_by_key().limit_to_last(1).get()
@@ -54,140 +85,172 @@ def get_realtime_data_from_api():
             for key, val in latest_data.items():
                 return val
         return None
-    except Exception as e:
+    except:
         return None
 
 @st.cache_data(ttl=60)
-def get_historical_data_from_db(start_dt, end_dt):
-    if start_dt > end_dt: return pd.DataFrame()
+def get_history(start_dt, end_dt):
+    try:
+        ref = db.reference('sensor_data')
+        all_data = ref.get()
+        if not all_data: return pd.DataFrame()
         
-    ref = db.reference('sensor_data')
-    all_data = ref.get()
-    if not all_data: return pd.DataFrame()
+        df = pd.DataFrame.from_dict(all_data, orient='index')
+        if 'saved_at' not in df.columns: return pd.DataFrame()
         
-    df = pd.DataFrame.from_dict(all_data, orient='index')
-    if 'saved_at' not in df.columns: return pd.DataFrame()
+        df['เวลา'] = pd.to_datetime(df['saved_at'])
+        start = pd.to_datetime(start_dt)
+        end = pd.to_datetime(end_dt) + timedelta(days=1)
         
-    df['เวลา'] = pd.to_datetime(df['saved_at'])
-    
-    start_datetime = pd.to_datetime(start_dt)
-    end_datetime = pd.to_datetime(end_dt) + timedelta(days=1)
-    
-    mask = (df['เวลา'] >= start_datetime) & (df['เวลา'] <= end_datetime)
-    filtered_df = df.loc[mask].copy().sort_values(by='เวลา')
-    
-    if 'pm25' in filtered_df.columns:
-        filtered_df.rename(columns={'pm25': 'PM2.5'}, inplace=True)
-    
-    # Ensure PM2.5 is numeric and drop empty rows
-    if 'PM2.5' in filtered_df.columns:
-        filtered_df['PM2.5'] = pd.to_numeric(filtered_df['PM2.5'], errors='coerce')
-        filtered_df.dropna(subset=['PM2.5'], inplace=True)
+        mask = (df['เวลา'] >= start) & (df['เวลา'] <= end)
+        filtered = df.loc[mask].copy().sort_values(by='เวลา')
         
-    return filtered_df
-
-# ==========================================
-# 4. UI Functions
-# ==========================================
-def render_aqi_gauge(pm25_val):
-    if pm25_val <= 37.5:
-        status, color, icon, width = "ดีมาก", "#10b981", "😊", "20%"
-    elif pm25_val <= 75:
-        status, color, icon, width = "ปานกลาง", "#f59e0b", "😐", "50%"
-    else:
-        status, color, icon, width = "มีผลกระทบ (แย่)", "#ef4444", "😷", "90%"
-
-    html = f"""
-    <div style="text-align: center; padding: 10px;">
-        <div style="font-size: 2rem; margin-bottom: 5px;">{icon}</div>
-        <div style="background-color: #e2e8f0; border-radius: 10px; height: 20px; width: 100%; position: relative;">
-            <div style="background-color: {color}; height: 100%; width: {width}; border-radius: 10px; transition: 0.5s;"></div>
-        </div>
-        <div style="margin-top: 10px; font-weight: bold; color: {color};">ระดับ: {status}</div>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
-
-def render_mask_recommendation(pm25_val):
-    if pm25_val > 37.5:
-        bg, text, msg = "#fee2e2", "#991b1b", "⚠️ <b>ควรสวมหน้ากากอนามัย</b>"
-    else:
-        bg, text, msg = "#dcfce7", "#166534", "✅ <b>อากาศดี</b>"
-    html = f'<div style="background-color: {bg}; color: {text}; padding: 20px; border-radius: 10px; text-align: center; height: 100%; display: flex; align-items: center; justify-content: center;"><span style="font-size: 1.1rem;">{msg}</span></div>'
-    st.markdown(html, unsafe_allow_html=True)
-
-# ==========================================
-# 5. Main Layout
-# ==========================================
-if start_date > end_date:
-    st.error("⚠️ Error: Start date must be before end date.")
-else:
-    st.markdown("<h1 class='main-title'>รายงานค่าฝุ่น PM 2.5 และสภาพอากาศ</h1>", unsafe_allow_html=True)
-    st.divider()
-
-    current_data = get_realtime_data_from_api()
-    
-    if current_data:
-        pm25_now = current_data.get('pm25', 0) 
-        temp_now = current_data.get('temperature', 0)
-        hum_now = current_data.get('humidity', 0)
-
-        col1, col2, col3 = st.columns([1.2, 1.5, 1.2])
-        with col1:
-            with st.container(border=True):
-                st.markdown("**ค่าฝุ่น PM 2.5**")
-                st.metric(label="", value=f"{pm25_now} µg/m³", label_visibility="collapsed")
-        with col2:
-            with st.container(border=True):
-                st.markdown("**คุณภาพอากาศ**")
-                render_aqi_gauge(pm25_now)
-        with col3:
-            with st.container(border=True):
-                st.markdown("**ข้อแนะนำ**")
-                render_mask_recommendation(pm25_now)
-
-        col4, col5 = st.columns([1, 1.5])
-        with col4:
-            st.markdown("### 🌡️ ค่าอื่นๆ")
-            with st.container(border=True):
-                c1, c2 = st.columns(2)
-                c1.metric("อุณหภูมิ", f"{temp_now} °C")
-                c2.metric("ความชื้น", f"{hum_now} %")
-        with col5:
-             st.markdown("### 🗺️ แผนที่เชียงราย")
-             st.image("https://i.imgur.com/rr7521d.jpeg", width=350)
-    else:
-        st.warning("กำลังรอข้อมูลจากเซ็นเซอร์ (Waiting for sensor data...)")
-
-    st.divider()
-
-    st.markdown("### 📊 ข้อมูลย้อนหลัง")
-    df_history = get_historical_data_from_db(start_date, end_date)
-
-    # Correct indentation starts here
-    if not df_history.empty and 'PM2.5' in df_history.columns:
-        with st.container(border=True):
-            fig = go.Figure()
+        # --- FIX: Rename specific sensor or clean name ---
+        if 'NRCT_PM2.5_3' in filtered.columns:
+            filtered.rename(columns={'NRCT_PM2.5_3': 'PM2.5'}, inplace=True)
+        elif 'pm25' in filtered.columns:
+            filtered.rename(columns={'pm25': 'PM2.5'}, inplace=True)
             
-            # Added markers (dots) + lines so you can see if the data is flat!
-            fig.add_trace(go.Scatter(
-                x=df_history['เวลา'], 
-                y=df_history['PM2.5'],
-                mode='lines+markers',
-                marker=dict(size=4, color='#3b82f6'),
-                line=dict(color='#3b82f6', width=1.5),
-                fill='tozeroy',
-                fillcolor='rgba(59, 130, 246, 0.2)',
-                name='PM2.5'
+        # Ensure numeric
+        if 'PM2.5' in filtered.columns:
+            filtered['PM2.5'] = pd.to_numeric(filtered['PM2.5'], errors='coerce')
+            filtered.dropna(subset=['PM2.5'], inplace=True)
+            
+        return filtered
+    except:
+        return pd.DataFrame()
+
+# ==========================================
+# 4. Sidebar Controls
+# ==========================================
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/3222/3222800.png", width=50)
+    st.title("Control Panel")
+    
+    st.markdown("### 📅 Select Date Range")
+    # Default to Feb 2026 based on your Excel data
+    default_start = date(2026, 2, 1)
+    default_end = date(2026, 3, 1)
+    
+    start_date = st.date_input("Start Date", default_start)
+    end_date = st.date_input("End Date", default_end)
+    
+    st.info("ℹ️ Data source: Smart PM2.5 Sensor (Model CRMS6)")
+
+# ==========================================
+# 5. Main Dashboard Layout
+# ==========================================
+
+# Title Section
+st.markdown('<div class="dashboard-title">🍃 CRMS6 Air Quality Monitor</div>', unsafe_allow_html=True)
+st.markdown('<div class="dashboard-subtitle">Real-time monitoring system for Chiang Rai Municipality School 6</div>', unsafe_allow_html=True)
+
+# Tabs for cleaner look
+tab1, tab2 = st.tabs(["📊 Dashboard & Map", "📈 Historical Analysis"])
+
+# --- TAB 1: Real-time Dashboard ---
+with tab1:
+    # 1. Get Data
+    data = get_realtime_data()
+    
+    if data:
+        # Extract values (with default 0 if missing)
+        pm25 = float(data.get('pm25', 0))
+        temp = float(data.get('temperature', 0))
+        hum = float(data.get('humidity', 0))
+        last_update = data.get('saved_at', 'Unknown')
+        
+        status_text, status_color = get_aqi_status(pm25)
+
+        # 2. Top Metrics Row
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("PM 2.5 (µg/m³)", f"{pm25}", delta=None)
+        col2.metric("Temperature", f"{temp} °C")
+        col3.metric("Humidity", f"{hum} %")
+        col4.metric("Last Update", str(last_update).split(" ")[1] if " " in str(last_update) else last_update)
+
+        st.markdown("---")
+
+        # 3. Gauge & Map Row
+        c_left, c_right = st.columns([1.5, 1])
+        
+        with c_left:
+            st.markdown("### ⏲️ Current Air Quality Index")
+            # Create a professional Gauge Chart
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number+delta",
+                value = pm25,
+                title = {'text': f"<b>Status: {status_text}</b>", 'font': {'size': 20, 'color': status_color}},
+                delta = {'reference': 37.5, 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
+                gauge = {
+                    'axis': {'range': [0, 150], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                    'bar': {'color': status_color},
+                    'bgcolor': "white",
+                    'borderwidth': 2,
+                    'bordercolor': "gray",
+                    'steps': [
+                        {'range': [0, 25], 'color': '#dcfce7'},
+                        {'range': [25, 37.5], 'color': '#fef9c3'},
+                        {'range': [37.5, 75], 'color': '#fee2e2'},
+                        {'range': [75, 150], 'color': '#ffcdd2'}
+                    ],
+                }
             ))
+            fig_gauge.update_layout(height=400, margin=dict(l=20,r=20,t=50,b=20))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+
+        with c_right:
+            st.markdown("### 📍 Location")
+            # Create a Map (Fixed coords for Chiang Rai School 6)
+            # 19.907, 99.833 is approx Chiang Rai City
+            map_data = pd.DataFrame({'lat': [19.9076], 'lon': [99.8332]}) 
+            st.map(map_data, zoom=14)
             
-            fig.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)', 
-                margin=dict(l=20, r=20, t=20, b=20), 
-                height=400,
-                xaxis=dict(rangeslider=dict(visible=True))
-            )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.markdown(f"""
+            <div style="background-color: {status_color}33; padding: 15px; border-radius: 10px; border-left: 5px solid {status_color};">
+                <h4 style="color: {status_color}; margin:0;">Recommendation</h4>
+                <p style="margin-top: 5px;">{ "⚠️ Wear a mask outdoors." if pm25 > 37.5 else "✅ Air is good. Enjoy outdoor activities!" }</p>
+            </div>
+            """, unsafe_allow_html=True)
+
     else:
-        st.info("ไม่มีข้อมูลในฐานข้อมูล (No data available in Database yet)")
+        st.warning("⏳ Waiting for data... Please ensure your MQTT script is running.")
+
+# --- TAB 2: History ---
+with tab2:
+    st.markdown("### 📉 Historical Trends")
+    
+    df_history = get_history(start_date, end_date)
+    
+    if not df_history.empty and 'PM2.5' in df_history.columns:
+        # Create the modern Area Chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df_history['เวลา'], 
+            y=df_history['PM2.5'],
+            mode='lines+markers',
+            name='PM 2.5',
+            line=dict(color='#0ea5e9', width=2),
+            marker=dict(size=4, color='#0284c7'),
+            fill='tozeroy',
+            fillcolor='rgba(14, 165, 233, 0.1)'
+        ))
+        
+        fig.update_layout(
+            title="PM 2.5 Levels Over Time",
+            xaxis_title="Date/Time",
+            yaxis_title="Concentration (µg/m³)",
+            template="plotly_white",
+            height=450,
+            hovermode="x unified",
+            xaxis=dict(showgrid=False, rangeslider=dict(visible=True)),
+            yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Show Data Table below
+        with st.expander("📄 View Raw Data"):
+            st.dataframe(df_history[['เวลา', 'PM2.5']].sort_values(by='เวลา', ascending=False), use_container_width=True)
+            
+    else:
+        st.info("No data found for the selected period.")
